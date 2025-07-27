@@ -27,27 +27,21 @@ export class FairNumberGenerator {
   constructor(cli) {
     this.cli = cli;
   }
-  async generate(range, options = []) {
+
+  async generate(range) {
     const secret = RandomSecretGenerator.generate();
     const random = RandomNumberGenerator.generate(range);
     const hmac = HmacGenerator.generate(secret, random);
 
     console.log(`I selected a random value in a range [0, ${range - 1}]`);
-    console.log(`HMAC: ${hmac}`);
-
+    this.cli.printHmac(hmac);
     const selected = await this.cli.promptNumber(
       `Select a value in range [0, ${range - 1}]:`,
       range
     );
 
     const result = (selected + random) % range;
-
-    console.log(`Result: (${selected} + ${random}) % ${range} = ${result}`);
-    console.log(`Your choice: ${selected}`);
-    console.log(`My choice: ${random}`);
-    console.log(`Result: (${selected} + ${random}) % ${range} = ${result}`);
-    console.log(`KEY: ${secret}`);
-
+    this.cli.printFairNumberResult(range, secret, random, selected, result);
     return result;
   }
 }

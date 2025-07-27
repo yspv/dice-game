@@ -1,5 +1,10 @@
-import { input } from "@inquirer/prompts";
-import { isNumber } from "./helpers.js";
+import { isNumber, isNumberInRange } from "./helpers.js";
+import { createInterface } from "readline/promises";
+
+const readline = createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
 
 export class CliParser {
   static DICES_MIN_LENGTH = 3;
@@ -59,22 +64,58 @@ export class CliParser {
   }
 }
 
+export class CliCommand {
+  constructor(title, command) {
+    this.title = title;
+    this.command = command;
+  }
+
+  execute() {
+    this.command();
+  }
+}
+
 export class Cli {
-  constructor(commands) {
+  constructor(commands = {}) {
     this.commands = commands;
   }
+
   async promptNumber(message, range) {
     while (true) {
-      const data = await input({
-        message: message,
-        validate: (value) =>
-          !!this.commands[value] ||
-          (isNumber(value) && value >= 0 && value < range),
-      });
-
-      const command = this.commands[data];
-      if (command) command();
-      else return data;
+      const data = await readline.question(message + " ");
+      if (this.commands.hasOwnProperty(data)) {
+        this.commands[data].execute();
+        continue;
+      }
+      if (!isNumberInRange(data, 0, range)) {
+        continue;
+      }
+      return data;
     }
+  }
+
+  printHmac(hmac) {
+    console.log("HMAC:", hmac);
+  }
+
+  printFairNumberResult(range, secret, random, selected, result) {
+    console.log(`Result: (${selected} + ${random}) % ${range} = ${result}`);
+    console.log(`Your choice: ${selected}`);
+    console.log(`My choice: ${random}`);
+    console.log(`Result: (${selected} + ${random}) % ${range} = ${result}`);
+    console.log(`KEY: ${secret}`);
+  }
+
+  printMenu(options) {
+    console.log(options.reduce((str, o, i) => str + `\n${i} - ${o}`, ""));
+    this.printCommands();
+  }
+
+  printCommands() {
+    const commands = Object.entries(this.commands).reduce(
+      (str, [key, command]) => str + `\n${key} - ${command.title}`,
+      ""
+    );
+    console.log(commands);
   }
 }

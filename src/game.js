@@ -3,7 +3,7 @@ import Table from "cli-table";
 import { FairNumberGenerator, RandomNumberGenerator } from "./random.js";
 import { Cli } from "./cli.js";
 
-export class ProbabilityCalculator {
+export class DiceProbabilityCalculator {
   static calculateProbability(dice1, dice2) {
     let wins = 0;
     for (const d1 of dice1) {
@@ -15,15 +15,19 @@ export class ProbabilityCalculator {
   }
 }
 
-export class TableGenerator {
-  static generateTable(dices) {
+export class DiceTableGenerator {
+  constructor(dices) {
+    this.dices = dices;
+  }
+
+  generateTable() {
     const table = new Table({
-      head: ["User dice v", ...dices.map((d) => d)],
+      head: ["User dice v", ...this.dices.map((d) => d)],
     });
-    for (const d1 of dices) {
+    for (const d1 of this.dices) {
       const row = [d1];
-      for (const d2 of dices) {
-        const result = ProbabilityCalculator.calculateProbability(d1, d2);
+      for (const d2 of this.dices) {
+        const result = DiceProbabilityCalculator.calculateProbability(d1, d2);
         row.push(result.toFixed(2));
       }
       table.push(row);
@@ -33,61 +37,49 @@ export class TableGenerator {
 }
 
 export class DiceGame {
-  constructor(dices) {
+  constructor(dices, cli = new Cli()) {
+    this.tableGenerator = new DiceTableGenerator(dices);
     this.dices = dices;
-    this.cli = new Cli({
-      q: () => this.quit(),
-      h: () => this.help(),
-    });
+    this.cli = cli;
     this.fairNumberGenerator = new FairNumberGenerator(this.cli);
   }
 
   async execute() {
     const dices = [...this.dices];
-    let userDice, pcDice;
-
-    this.help();
+    console.log(this.tableGenerator.generateTable().toString());
     console.log("Let's determine who makes first move.");
-    this.menu([0, 1]);
-
-    const isUser = await this.fairNumberGenerator.generate(2);
-
-    if (!isUser) {
-      console.log(chalk.bold.green("The first move is yours"));
-      userDice = await this.selectUserDice(dices);
-      pcDice = this.selectPcDice(dices);
-    } else {
-      pcDice = this.selectPcDice(dices);
-      console.log(chalk.bold.blue(`The first move is mine: ${pcDice}`));
-      userDice = await this.selectUserDice(dices);
-    }
-
+    this.cli.printMenu([0, 1]);
+    let { user: userDice, pc: pcDice } = await this.selectDice(dices);
     console.log(`I selected: ${pcDice}`);
     console.log(`You selected: ${userDice}`);
-
     console.log(chalk.bold.blue("\nMy turn to roll"));
-
-    this.menu(pcDice);
-    const pcRoll = await this.fairNumberGenerator.generate(pcDice.length);
-    const pcResult = pcDice[pcRoll];
-
+    const pcResult = await this.roll(pcDice);
     console.log(`My result: ${pcResult}`);
-    console.log(chalk.bold.green("\nYour turn to roll"));
-
-    this.menu(userDice);
-    const userRoll = await this.fairNumberGenerator.generate(userDice.length);
-    const userResult = userDice[userRoll];
-
+    console.log(`\nYour turn to roll`);
+    const userResult = await this.roll(userDice);
     console.log(`Your result: ${userResult}`);
-
     this.determineWinner(pcResult, userResult);
   }
 
-  menu(options) {
-    console.log(options.reduce((str, o, i) => str + `\n${i} - ${o}`, ""));
-    console.log(`q - quit`);
-    console.log(`h - help`);
-    console.log();
+  async roll(dice) {
+    this.cli.printMenu(dice);
+    const roll = await this.fairNumberGenerator.generate(dice.length);
+    return dice[roll];
+  }
+
+  async selectDice(dices) {
+    let user, pc;
+    const isUser = await this.fairNumberGenerator.generate(2);
+    if (isUser) {
+      console.log(chalk.bold.green("The first move is yours"));
+      user = await this.selectUserDice(dices);
+      pc = this.selectPcDice(dices);
+    } else {
+      pc = this.selectPcDice(dices);
+      console.log(chalk.bold.blue(`The first move is mine: ${pc}`));
+      user = await this.selectUserDice(dices);
+    }
+    return { user, pc };
   }
 
   selectPcDice(dices) {
@@ -98,7 +90,7 @@ export class DiceGame {
   }
 
   async selectUserDice(dices) {
-    this.menu(dices);
+    this.cli.printMenu(dices);
     const userDiceIndex = await this.cli.promptNumber(
       `Select number in a range [0, ${dices.length - 1}]:`,
       dices.length
@@ -106,16 +98,6 @@ export class DiceGame {
     const userDice = dices[userDiceIndex];
     dices.splice(userDiceIndex, 1);
     return userDice;
-  }
-
-  quit() {
-    console.log("Goodbye!");
-    process.exit(0);
-  }
-
-  help() {
-    const table = TableGenerator.generateTable(this.dices);
-    console.log(`\n${table.toString()}`);
   }
 
   determineWinner(pcRoll, userRoll) {
@@ -128,5 +110,6 @@ export class DiceGame {
         chalk.bold.yellow("It's a tie!", `(${pcRoll} = ${userRoll})`)
       );
     }
+    process.exit(0);
   }
 }
